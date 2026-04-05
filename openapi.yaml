@@ -1,0 +1,151 @@
+openapi: "3.0.1"
+info:
+  title: "Ecommerce Transactions API"
+  description: "REST API for managing ecommerce transactions. Supports retrieving individual transactions, counting total transactions, and creating new transactions."
+  version: "1.0.0"
+
+paths:
+  /transactions/{id}:
+    get:
+      operationId: getTransaction
+      summary: "Get a transaction by ID"
+      description: "Returns a single transaction object matching the provided transaction ID. Use this to look up details such as amount, status, and purchased items for a specific transaction."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The unique transaction ID (e.g., TXN-00001)"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Transaction found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "404":
+          description: "Transaction not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${AwsRegion}:lambda:path/2015-03-31/functions/${GetTransactionFunctionArn}/invocations"
+        passthroughBehavior: when_no_match
+
+  /total-transactions:
+    get:
+      operationId: getTotalTransactions
+      summary: "Get total number of transactions"
+      description: "Returns the total count of all transactions in the system. Use this to get a quick overview of transaction volume without retrieving individual records."
+      responses:
+        "200":
+          description: "Total transaction count"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionCount"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${AwsRegion}:lambda:path/2015-03-31/functions/${GetTotalTransactionsFunctionArn}/invocations"
+        passthroughBehavior: when_no_match
+
+  /new-transaction:
+    post:
+      operationId: createTransaction
+      summary: "Create a new transaction"
+      description: "Creates a new ecommerce transaction. Requires an amount, item description, and status. Returns the created transaction with a generated transaction ID and timestamp."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - itemName
+                - status
+              properties:
+                amount:
+                  type: number
+                  description: "Transaction amount"
+                currency:
+                  type: string
+                  description: "ISO 4217 currency code (defaults to USD)"
+                  default: "USD"
+                status:
+                  type: string
+                  enum: [completed, pending, refunded]
+                  description: "Current transaction status"
+                itemName:
+                  type: string
+                  description: "Description of purchased items"
+      responses:
+        "201":
+          description: "Transaction created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTransactionResponse"
+        "400":
+          description: "Invalid request body or missing required fields"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: "arn:aws:apigateway:${AwsRegion}:lambda:path/2015-03-31/functions/${CreateTransactionFunctionArn}/invocations"
+        passthroughBehavior: when_no_match
+
+components:
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          description: "Unique transaction identifier"
+        amount:
+          type: number
+          description: "Transaction amount in the specified currency"
+        currency:
+          type: string
+          description: "ISO 4217 currency code (e.g., USD)"
+        status:
+          type: string
+          enum: [completed, pending, refunded]
+          description: "Current transaction status"
+        date:
+          type: string
+          description: "Transaction date in YYYY-MM-DD format"
+        itemName:
+          type: string
+          description: "Description of purchased items"
+
+    TransactionCount:
+      type: object
+      properties:
+        totalTransactions:
+          type: integer
+          description: "Total number of transactions"
+
+    CreateTransactionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "Error description"
